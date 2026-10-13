@@ -302,6 +302,70 @@ export function takeSectionPrefetch(
     return pending.data;
 }
 
+export interface SectionStorage {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+    removeItem(key: string): void;
+}
+
+export interface SectionStorageKeys {
+    sections: string;
+    version: string;
+    website: string;
+}
+
+export interface SectionScopeSource {
+    websiteId?: number | null;
+    storeId?: number | null;
+    currency?: string | null;
+}
+
+export type SectionScope = string | number | null | undefined;
+
+export function sectionScope(source: SectionScopeSource | null | undefined): string | null {
+    if (!source || source.websiteId === null || source.websiteId === undefined) {
+        return null;
+    }
+    if (!source.storeId && !source.currency) {
+        return String(source.websiteId);
+    }
+    return `${source.websiteId}|${source.storeId ?? ""}|${source.currency ?? ""}`;
+}
+
+export function readScopedSections(
+    storage: SectionStorage,
+    keys: SectionStorageKeys,
+    currentWebsiteId: SectionScope,
+): SectionMap {
+    const stored = storage.getItem(keys.website);
+    const known = currentWebsiteId !== null && currentWebsiteId !== undefined;
+    const unstamped = stored === null || stored === "";
+    const cached = storage.getItem(keys.sections) !== null;
+    if (known && ((!unstamped && stored !== String(currentWebsiteId)) || (unstamped && cached))) {
+        storage.removeItem(keys.sections);
+        storage.removeItem(keys.version);
+        storage.removeItem(keys.website);
+        return {};
+    }
+    return parseSectionStorage(storage.getItem(keys.sections));
+}
+
+export function writeScopedSections(
+    storage: SectionStorage,
+    keys: SectionStorageKeys,
+    sections: SectionMap,
+    currentWebsiteId: SectionScope,
+    syncedVersion?: string,
+): void {
+    storage.setItem(keys.sections, JSON.stringify(sections));
+    if (syncedVersion !== undefined) {
+        storage.setItem(keys.version, syncedVersion);
+    }
+    if (currentWebsiteId !== null && currentWebsiteId !== undefined) {
+        storage.setItem(keys.website, String(currentWebsiteId));
+    }
+}
+
 function pickObjectEntries(value: unknown): SectionMap {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return {};
